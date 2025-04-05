@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FireSpace - Wildfire Analytics</title>
+  <!-- Leaflet CSS for Map Demo -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    /* Global reset */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Helvetica Neue', sans-serif; background: #121212; color: #f0f0f0; line-height: 1.6; }
+    a { color: #ff5722; text-decoration: none; }
+    
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      background: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      z-index: 1000;
+    }
+    .nav-logo, .nav-button {
+      background: #1f1f1f;
+      border-radius: 12px;
+      padding: 8px 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      transition: transform 0.3s ease, background 0.3s ease;
+      cursor: pointer;
+    }
+    .nav-logo:hover, .nav-button:hover { transform: scale(1.05); background: #333; }
+    .nav-logo { font-size: 1.6rem; font-weight: bold; }
+    nav ul { list-style: none; display: flex; }
+    nav ul li { margin-left: 20px; }
+    
+    /* Hero Section */
+    .hero {
+      height: 100vh;
+      background: url('https://source.unsplash.com/1600x900/?wildfire,smoke') no-repeat center center/cover;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .hero::after {
+      content: "";
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+    }
+    .hero .content {
+      position: relative;
+      z-index: 2;
+      padding: 20px;
+    }
+    .hero h1 { font-size: 4rem; margin-bottom: 20px; }
+    .hero p { font-size: 1.5rem; margin-bottom: 40px; }
+    .hero .btn {
+      background: #ff5722;
+      border: none;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      border-radius: 12px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+    }
+    .hero .btn:hover { background: #e64a19; transform: scale(1.05); }
+    
+    /* How We Did It Section */
+    .section {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 60px 20px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    }
+    .section.visible { opacity: 1; transform: translateY(0); }
+    .section .image, .section .text {
+      flex: 1 1 500px;
+      padding: 20px;
+    }
+    .section .image img {
+      width: 100%;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+    }
+    .section .text h2 { font-size: 2.5rem; margin-bottom: 20px; }
+    .section .text p { font-size: 1.2rem; }
+    
+    /* Map Demo Section */
+    #map-demo {
+      display: none;
+      height: calc(100vh - 80px);
+      margin-top: 80px;
+      position: relative;
+    }
+    #map { width: 100%; height: 100%; border-radius: 12px; }
+    /* Red overlay positioned at top-right */
+    .fire-overlay {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,87,34,0.8);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      font-size: 1.2rem;
+      z-index: 1000;
+      max-width: 300px;
+      white-space: pre-line;
+    }
+    
+    /* Footer */
+    footer {
+      background: #1f1f1f;
+      text-align: center;
+      padding: 20px;
+      font-size: 0.9rem;
+      color: #777;
+    }
+    
+    /* Fire Emoji Animation */
+    @keyframes flicker {
+      0% { opacity: 0.8; }
+      50% { opacity: 1; }
+      100% { opacity: 0.8; }
+    }
+    .fire-emoji {
+      display: inline-block;
+      animation: flicker 1s infinite alternate;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-logo" id="homeBtn">🔥 FireSpace</div>
+    <ul>
+      <li><div class="nav-button" id="aboutNav">About</div></li>
+      <li><div class="nav-button" id="howNav">How We Did It</div></li>
+      <li><div class="nav-button" id="demoNav">Demo</div></li>
+    </ul>
+  </nav>
+  
+  <!-- Hero / About Section -->
+  <header class="hero" id="hero">
+    <div class="content">
+      <h1>Welcome to <span class="fire-emoji">🔥</span> FireSpace</h1>
+      <p>Revolutionizing wildfire prediction in California</p>
+      <button class="btn" id="demoBtn">Demo April 4, 2025</button>
+    </div>
+  </header>
+  
+  <!-- How We Did It Sections -->
+  <section class="section container" id="how">
+    <div class="image">
+      <img src="https://source.unsplash.com/600x400/?satellite,data" alt="Data Collection">
+    </div>
+    <div class="text">
+      <h2>Step 1: Data Collection</h2>
+      <p>We sourced historical wildfire and weather data from NASA FIRMS and public weather datasets.</p>
+    </div>
+  </section>
+  <section class="section container" id="how2">
+    <div class="image">
+      <img src="https://source.unsplash.com/600x400/?cleaning,data" alt="Data Cleaning">
+    </div>
+    <div class="text">
+      <h2>Step 2: Data Cleaning</h2>
+      <p>Our team standardized dates and locations (e.g., "los angeles, ca") to merge diverse data sources seamlessly.</p>
+    </div>
+  </section>
+  <section class="section container" id="how3">
+    <div class="image">
+      <img src="https://source.unsplash.com/600x400/?integration,api" alt="Data Integration">
+    </div>
+    <div class="text">
+      <h2>Step 3: Data Integration</h2>
+      <p>We pipelined wildfire, weather, and supplemental environmental data into one unified dataset for model training.</p>
+    </div>
+  </section>
+  <section class="section container" id="how4">
+    <div class="image">
+      <img src="https://source.unsplash.com/600x400/?machine,learning" alt="Model Training">
+    </div>
+    <div class="text">
+      <h2>Step 4: Model Training</h2>
+      <p>Our machine learning model processes historical and real-time data to predict fire spread with high accuracy.</p>
+    </div>
+  </section>
+  <section class="section container" id="how5">
+    <div class="image">
+      <img src="https://source.unsplash.com/600x400/?visualization,map" alt="Interactive Visualization">
+    </div>
+    <div class="text">
+      <h2>Step 5: Interactive Visualization</h2>
+      <p>Our interactive map displays live predictions and data. Click on any location to see our model's dynamic fire-spread simulation.</p>
+    </div>
+  </section>
+  
+  <!-- Map Demo Section -->
+  <section id="map-demo">
+    <div id="map"></div>
+    <!-- Red overlay positioned at top-right for static CSV timeline -->
+    <div class="fire-overlay" id="timeOverlay">April 4, 2025<br>Time: 01:00:01<br>Loading data...</div>
+  </section>
+  
+  <!-- Footer -->
+  <footer>
+    &copy; 2025 FireSpace. All rights reserved.
+  </footer>
+  
+  <!-- Scripts -->
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- PapaParse for CSV parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script>
+    /***** Global Variables *****/
+    let demoMode = false;
+    // Global array to store each phase’s duplicate polygon
+    let firePolygons = [];
+    
+    /***** Navigation & View Functions *****/
+    function showMainPage() {
+      demoMode = false;
+      document.getElementById("hero").style.display = "flex";
+      document.getElementById("how").style.display = "flex";
+      document.getElementById("how2").style.display = "flex";
+      document.getElementById("how3").style.display = "flex";
+      document.getElementById("how4").style.display = "flex";
+      document.getElementById("how5").style.display = "flex";
+      document.getElementById("map-demo").style.display = "none";
+    }
+    function showMapDemo() {
+      demoMode = true;
+      document.getElementById("hero").style.display = "none";
+      document.getElementById("how").style.display = "none";
+      document.getElementById("how2").style.display = "none";
+      document.getElementById("how3").style.display = "none";
+      document.getElementById("how4").style.display = "none";
+      document.getElementById("how5").style.display = "none";
+      document.getElementById("map-demo").style.display = "block";
+      initMap();
+      startStaticTimeAnimation();
+    }
+    document.getElementById("homeBtn").addEventListener("click", () => {
+      if(demoMode) showMainPage();
+      else document.getElementById("hero").scrollIntoView({ behavior: "smooth" });
+    });
+    document.getElementById("aboutNav").addEventListener("click", () => {
+      if(demoMode) showMainPage();
+      else document.getElementById("hero").scrollIntoView({ behavior: "smooth" });
+    });
+    document.getElementById("howNav").addEventListener("click", () => {
+      if(demoMode) showMainPage();
+      else document.getElementById("how").scrollIntoView({ behavior: "smooth" });
+    });
+    document.getElementById("demoNav").addEventListener("click", () => {
+      showMapDemo();
+    });
+    document.getElementById("demoBtn").addEventListener("click", () => {
+      showMapDemo();
+    });
+    
+    /***** Scroll Animation for Sections *****/
+    const sections = document.querySelectorAll('.section');
+    const observerOptions = { threshold: 0.2 };
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, observerOptions);
+    sections.forEach(section => observer.observe(section));
+    
+    /***** Map Initialization and Interactive Fire Polygon *****/
+    let map;
+    function initMap() {
+      map = L.map('map').setView([36.7783, -119.4179], 6);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+      
+      // Marker example for Los Angeles
+      const laMarker = L.marker([34.0522, -118.2437]).addTo(map);
+      laMarker.bindPopup("<b>Los Angeles, CA</b><br>Fire risk: Moderate.");
+      
+      // Clear previous click listeners and add a new one
+      map.off('click');
+      map.on('click', function(e) {
+        createFirePolygon(e.latlng);
+      });
+      
+      // Create a default polygon at Los Angeles
+      createFirePolygon(L.latLng(34.0522, -118.2437));
+    }
+    
+    // --- Modified: Create polygon vertices with an angle offset.
+    function createPolygonVertices(center, baseRadius, offsets, scale, angleOffset = 0) {
+      const numSides = offsets.length;
+      let vertices = [];
+      for (let i = 0; i < numSides; i++) {
+        let radius = baseRadius + offsets[i] * scale;
+        let angle = (2 * Math.PI / numSides) * i + angleOffset;
+        let deltaLat = (radius / 111320) * Math.cos(angle);
+        let deltaLng = (radius / (40075000 * Math.cos(center.lat * Math.PI/180) / 360)) * Math.sin(angle);
+        vertices.push([center.lat + deltaLat, center.lng + deltaLng]);
+      }
+      return vertices;
+    }
+    
+    // --- Helper function to animate between two sets of vertices ---
+    function animatePhaseFromVertices(polygon, startVertices, targetVertices, startColor, endColor, duration, callback) {
+      let startTime = null;
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        let progress = timestamp - startTime;
+        let t = Math.min(progress / duration, 1);
+        let interpolatedVertices = startVertices.map((pt, i) => {
+          return [pt[0] + (targetVertices[i][0] - pt[0]) * t, pt[1] + (targetVertices[i][1] - pt[1]) * t];
+        });
+        polygon.setLatLngs(interpolatedVertices);
+        let currentColor = interpolateColor(startColor, endColor, t);
+        polygon.setStyle({ color: currentColor, fillColor: currentColor });
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          callback(targetVertices);
+        }
+      }
+      requestAnimationFrame(step);
+    }
+    
+    // --- Modified animatePhase to include an angleOffset parameter.
+    function animatePhase(polygon, center, baseRadius, offsets, startScale, endScale, startColor, endColor, duration, angleOffset, callback) {
+      let startTime = null;
+      function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        let progress = timestamp - startTime;
+        let t = Math.min(progress / duration, 1);
+        let scaleFactor = startScale + (endScale - startScale) * t;
+        let currentColor = interpolateColor(startColor, endColor, t);
+        let newVertices = createPolygonVertices(center, baseRadius, offsets, scaleFactor, angleOffset);
+        polygon.setLatLngs(newVertices);
+        polygon.setStyle({ color: currentColor, fillColor: currentColor });
+        if (t < 1) {
+          requestAnimationFrame(step);
+        } else {
+          callback(newVertices);
+        }
+      }
+      requestAnimationFrame(step);
+    }
+    
+    // --- Phase 1: Expand from scale 1 to 2.5, color remains red.
+    // Use an initial angle offset between -0.2 and 0.2.
+    function animatePhase1(center, baseRadius, offsets, angleOffset) {
+      let vertices = createPolygonVertices(center, baseRadius, offsets, 1, angleOffset);
+      let polygon = L.polygon(vertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      animatePhase(polygon, center, baseRadius, offsets, 1, 2.5, "#ff0000", "#ff0000", 5000, angleOffset, (finalVertices) => {
+        // Proceed to Phase 2; pass along the current offsets.
+        // For Phase 2, use a new angle offset between -0.15 and 0.15.
+        let newAngleOffset = -0.15 + Math.random() * 0.3;
+        animatePhase2(center, baseRadius, finalVertices, offsets, newAngleOffset);
+      });
+    }
+    
+    // --- Phase 2: Duplicate polygon; animate from previous state to new state (scale 3.5, red to orange).
+    // Grow each offset by an additional random amount (500–1500) and use a new angle offset.
+    function animatePhase2(center, baseRadius, startVertices, currentOffsets, angleOffset) {
+      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 3.5, angleOffset);
+      let polygon = L.polygon(startVertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ff0000", "#ff7f00", 3000, (finalVertices) => {
+        animatePhase3(center, baseRadius, finalVertices, newOffsets, -0.1 + Math.random() * 0.2);
+      });
+    }
+    
+    // --- Phase 3: Duplicate polygon; animate from previous state to new state (scale 4.5, orange to yellow).
+    function animatePhase3(center, baseRadius, startVertices, currentOffsets, angleOffset) {
+      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 4.5, angleOffset);
+      let polygon = L.polygon(startVertices, { color: "#ff7f00", fillColor: "#ff7f00", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ff7f00", "#ffff00", 3000, (finalVertices) => {
+        animatePhase4(center, baseRadius, finalVertices, newOffsets, -0.05 + Math.random() * 0.1);
+      });
+    }
+    
+    // --- Phase 4: Duplicate polygon; animate from previous state to new state (scale 5.0, yellow to green).
+    function animatePhase4(center, baseRadius, startVertices, currentOffsets, angleOffset) {
+      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 5.0, angleOffset);
+      let polygon = L.polygon(startVertices, { color: "#ffff00", fillColor: "#ffff00", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ffff00", "#00ff00", 3000, (finalVertices) => {
+        // Final polygon remains green. After a short delay, re-order layers.
+        setTimeout(reorderPolygons, 100);
+      });
+    }
+    
+    // --- Create a fire polygon with fixed random offsets for a jagged 20-sided shape.
+    // The initial offsets are generated between 500 and 1500, and an initial angle offset is set.
+    function createFirePolygon(center) {
+      const numSides = 20;
+      const baseRadius = 1000; // starting radius in meters
+      let offsets = [];
+      for (let i = 0; i < numSides; i++) {
+        offsets.push(500 + Math.random() * 1000);
+      }
+      let initialAngleOffset = -0.2 + Math.random() * 0.4;
+      firePolygons = [];
+      animatePhase1(center, baseRadius, offsets, initialAngleOffset);
+    }
+    
+    // Reorder the polygons so that the smallest (Phase 1) is on top.
+    function reorderPolygons() {
+      for (let i = firePolygons.length - 1; i >= 0; i--) {
+        firePolygons[i].bringToFront();
+      }
+    }
+    
+    // Helper functions for color interpolation
+    function interpolateColor(color1, color2, t) {
+      let c1 = hexToRgb(color1);
+      let c2 = hexToRgb(color2);
+      let r = Math.round(c1.r + (c2.r - c1.r) * t);
+      let g = Math.round(c1.g + (c2.g - c1.g) * t);
+      let b = Math.round(c1.b + (c2.b - c1.b) * t);
+      return rgbToHex(r, g, b);
+    }
+    function hexToRgb(hex) {
+      hex = hex.replace("#", "");
+      let bigint = parseInt(hex, 16);
+      let r = (bigint >> 16) & 255;
+      let g = (bigint >> 8) & 255;
+      let b = bigint & 255;
+      return { r, g, b };
+    }
+    function rgbToHex(r, g, b) {
+      return "#" + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join("");
+    }
+    
+    /***** Static CSV Data & Timeline Simulation *****/
+    const staticCSV = `time,rain (mm),relative_humidity_2m (%),soil_moisture_0_to_1cm (m³/m³),soil_moisture_1_to_3cm (m³/m³),vapour_pressure_deficit (kPa),visibility (m),wind_speed_180m (km/h),wind_direction_180m (°),temperature_180m (°C)
+1:00:00,0.00,66,0.273,0.274,0.31,51220.00,14.2,24,3.1
+1:00:05,0.00,56,0.273,0.274,0.44,65420.00,14.7,25,4.2
+1:00:10,0.00,51,0.273,0.274,0.53,70100.00,12.7,15,5.1
+1:00:15,0.00,49,0.273,0.274,0.60,71480.00,13.3,358,6.1
+1:00:20,0.00,44,0.273,0.274,0.71,74280.00,21.2,10,7.1
+1:00:25,0.00,37,0.273,0.274,0.82,75940.00,32.0,19,7.5
+1:00:30,0.00,34,0.273,0.274,0.87,76780.00,32.7,17,7.6
+1:00:35,0.00,30,0.273,0.274,0.90,78420.00,36.0,22,7.4
+1:00:40,0.00,34,0.273,0.274,0.80,76880.00,36.6,23,6.5
+1:00:45,0.00,42,0.273,0.274,0.63,75540.00,41.3,29,5.3
+1:00:50,0.00,40,0.274,0.275,0.59,75880.00,43.9,31,4.1
+1:00:55,0.00,40,0.274,0.275,0.55,75860.00,40.9,31,3.4
+1:01:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:01:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:01:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:01:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:01:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:01:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:01:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:01:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:01:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:01:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:01:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:01:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:02:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:02:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:02:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:02:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:02:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:02:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:02:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:02:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:02:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:02:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:02:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:02:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:03:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:03:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:03:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:03:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:03:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:03:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:03:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:03:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:03:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:03:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:03:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:03:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:04:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:04:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:04:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:04:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:04:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:04:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:04:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:04:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:04:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:04:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:04:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:04:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:05:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:05:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:05:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:05:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:05:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:05:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:05:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:05:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:05:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:05:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:05:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:05:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:06:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:06:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:06:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:06:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:06:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:06:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:06:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:06:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:06:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:06:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:06:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:06:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:06:60,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:07:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:07:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:07:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:07:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:07:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:07:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:07:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:07:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:07:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:07:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:07:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:08:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:08:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:08:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:08:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:08:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:08:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:08:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:08:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:08:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:08:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:08:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:08:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:09:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:09:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:09:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:09:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:09:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:09:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:09:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:09:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:09:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:09:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:09:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:09:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:10:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:10:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:10:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:10:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:10:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:10:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:10:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:10:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:10:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:10:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:10:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:10:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:11:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:11:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:11:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:11:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:11:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:11:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:11:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:11:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:11:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:11:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:11:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:11:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:12:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:12:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:12:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:12:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:12:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:12:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:12:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:12:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:12:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:12:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:12:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:12:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5
+1:13:00,0.00,37,0.275,0.276,0.53,76620.00,33.5,40,2.5
+1:13:05,0.00,43,0.276,0.277,0.46,75540.00,32.6,42,1.8
+1:13:10,0.00,50,0.276,0.277,0.38,72560.00,29.3,34,1.1
+1:13:15,0.00,54,0.277,0.277,0.33,69320.00,29.3,34,0.7
+1:13:20,0.00,56,0.277,0.278,0.31,67280.00,26.2,32,0.6
+1:13:25,0.00,59,0.278,0.278,0.28,63900.00,27.9,17,0.4
+1:13:30,0.00,63,0.278,0.279,0.25,58940.00,28.8,26,0.3
+1:13:35,0.00,65,0.279,0.279,0.23,56200.00,29.7,17,0.0
+1:13:40,0.00,69,0.279,0.279,0.20,49180.00,28.6,14,-0.1
+1:13:45,0.00,71,0.279,0.280,0.18,45580.00,22.6,8,-0.3
+1:13:50,0.00,70,0.280,0.280,0.19,46240.00,24.5,358,-0.6
+1:13:55,0.00,69,0.280,0.280,0.20,47360.00,25.6,359,-0.5`;
+
+    
+    let csvData = Papa.parse(staticCSV, { header: true, skipEmptyLines: true }).data;
+    let lastCSVRow = csvData[0];
+    function getCSVRowForTime(timeStr) {
+      let candidate = null;
+      for (let i = 0; i < csvData.length; i++) {
+        if (csvData[i].Time <= timeStr) {
+          candidate = csvData[i];
+        } else {
+          break;
+        }
+      }
+      if (candidate) {
+        lastCSVRow = candidate;
+        return candidate;
+      } else {
+        return lastCSVRow;
+      }
+    }
+    
+    let simulatedDate = new Date("2025-04-04T01:00:01");
+    function startStaticTimeAnimation() {
+      const overlay = document.getElementById("timeOverlay");
+      const fixedDate = "April 4, 2025";
+      setInterval(() => {
+        let hours = simulatedDate.getHours().toString().padStart(2, '0');
+        let minutes = simulatedDate.getMinutes().toString().padStart(2, '0');
+        let seconds = simulatedDate.getSeconds().toString().padStart(2, '0');
+        let timeStr = `${hours}:${minutes}:${seconds}`;
+        let displayStr = `${fixedDate}\nTime: ${timeStr}\n`;
+        let row = getCSVRowForTime(timeStr);
+        if (row) {
+          for (let key in row) {
+            if (key !== "Time" && row[key].trim() !== "") {
+              displayStr += `${key}: ${row[key]}\n`;
+            }
+          }
+        } else {
+          displayStr += "No data available.";
+        }
+        overlay.innerText = displayStr;
+        simulatedDate = new Date(simulatedDate.getTime() + 1000);
+      }, 1000);
+    }
+    
+  </script>
+</body>
+</html>
