@@ -39,7 +39,7 @@
     /* Hero Section */
     .hero {
       height: 100vh;
-      background: url('https://source.unsplash.com/1600x900/?wildfire,smoke') no-repeat center center/cover;
+      background: url('https://cnr.ncsu.edu/news/wp-content/uploads/sites/10/2024/10/wildfire-pine-forest-florida-istock-1146x600-1.jpg') no-repeat center center/cover;
       position: relative;
       display: flex;
       align-items: center;
@@ -146,7 +146,7 @@
     <ul>
       <li><div class="nav-button" id="aboutNav">About</div></li>
       <li><div class="nav-button" id="howNav">How We Did It</div></li>
-      <li><div class="nav-button" id="demoNav">Demo</div></li>
+      <li><div class="nav-button" id="demoNav">Predict</div></li>
     </ul>
   </nav>
   
@@ -155,54 +155,54 @@
     <div class="content">
       <h1>Welcome to <span class="fire-emoji">🔥</span> FireSpace</h1>
       <p>Revolutionizing wildfire prediction in California</p>
-      <button class="btn" id="demoBtn">Demo April 4, 2025</button>
+      <button class="btn" id="demoBtn">Predict Fires</button>
     </div>
   </header>
   
   <!-- How We Did It Sections -->
   <section class="section container" id="how">
     <div class="image">
-      <img src="https://source.unsplash.com/600x400/?satellite,data" alt="Data Collection">
+      <img src="file:///var/folders/yt/z87msxyn14x50l66fd30cbvh0000gn/T/TemporaryItems/NSIRD_screencaptureui_lQAIxi/Screenshot%202025-04-05%20at%204.29.19%E2%80%AFPM.png" alt="Data Collection">
     </div>
     <div class="text">
       <h2>Step 1: Data Collection</h2>
-      <p>We sourced historical wildfire and weather data from NASA FIRMS and public weather datasets.</p>
+      <p>We gathered current and historical wildfire and conditions data from various sources such as NASA FIRMS and Open Meteo. We collected factors such as humidity, temperature, dryness, and biomass. We then used Palantir's tools to clean and transform the data.</p>
     </div>
   </section>
   <section class="section container" id="how2">
     <div class="image">
-      <img src="https://source.unsplash.com/600x400/?cleaning,data" alt="Data Cleaning">
+      <img src="https://www.couchbase.com/blog/wp-content/uploads/2021/10/training-data-jupyter-notebook.png" alt="Data Cleaning">
     </div>
     <div class="text">
-      <h2>Step 2: Data Cleaning</h2>
-      <p>Our team standardized dates and locations (e.g., "los angeles, ca") to merge diverse data sources seamlessly.</p>
+      <h2>Step 2: Training</h2>
+      <p>We then used the cleaned data to train a model in Palantir which would take in current data inputs such as humidity, temperature, dryness, and biomass and outputs a predicted fire radius.</p>
     </div>
   </section>
   <section class="section container" id="how3">
     <div class="image">
-      <img src="https://source.unsplash.com/600x400/?integration,api" alt="Data Integration">
+      <img src="file:///var/folders/yt/z87msxyn14x50l66fd30cbvh0000gn/T/TemporaryItems/NSIRD_screencaptureui_todY6A/Screenshot%202025-04-05%20at%204.41.48%E2%80%AFPM.png" alt="Data Integration">
     </div>
     <div class="text">
-      <h2>Step 3: Data Integration</h2>
-      <p>We pipelined wildfire, weather, and supplemental environmental data into one unified dataset for model training.</p>
+      <h2>Step 3: Exposing Function</h2>
+      <p>We then converted the model into a typescript function. Then we exposed the function to be called through javascript.</p>
     </div>
   </section>
   <section class="section container" id="how4">
     <div class="image">
-      <img src="https://source.unsplash.com/600x400/?machine,learning" alt="Model Training">
+      <img src="https://t3.ftcdn.net/jpg/05/31/71/02/360_F_531710260_ByieqNe7Ut6QBHgIR7xgdsxH7gICrHr1.jpg" alt="Model Training">
     </div>
     <div class="text">
-      <h2>Step 4: Model Training</h2>
-      <p>Our machine learning model processes historical and real-time data to predict fire spread with high accuracy.</p>
+      <h2>Step 4: FrontEnd</h2>
+      <p>We built a front end in HTML which displays a map and animates how the fire will spread depending on a location.</p>
     </div>
   </section>
   <section class="section container" id="how5">
     <div class="image">
-      <img src="https://source.unsplash.com/600x400/?visualization,map" alt="Interactive Visualization">
+      <img src="https://media.istockphoto.com/id/1448152453/vector/big-data-technology-and-data-science-illustration-data-flow-concept-querying-analysing.jpg?s=612x612&w=0&k=20&c=To0lhCrVmDYdSkOUOGxGsjlYe0buj_wwGCDqYhF9p2o=" alt="Interactive Visualization">
     </div>
     <div class="text">
-      <h2>Step 5: Interactive Visualization</h2>
-      <p>Our interactive map displays live predictions and data. Click on any location to see our model's dynamic fire-spread simulation.</p>
+      <h2>Future Plans</h2>
+      <p>We plan to expand our model and train it with more data to make a more accurate prediction.</p>
     </div>
   </section>
   
