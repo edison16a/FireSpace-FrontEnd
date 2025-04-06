@@ -114,8 +114,11 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       font-size: 1.2rem;
       z-index: 1000;
-      max-width: 300px;
+      max-width: 320px;
       white-space: pre-line;
+    }
+    #growthOverlay {
+      top: 360px; /* shift down so it appears below #timeOverlay */
     }
     
     /* Footer */
@@ -224,6 +227,9 @@
     <div id="map"></div>
     <!-- Red overlay positioned at top-right for static CSV timeline -->
     <div class="fire-overlay" id="timeOverlay">Please Click at a point to Get Data and Simulate Fire at That Area</div>
+    <!-- 1) Insert the new overlay in your #map-demo section, AFTER the timeOverlay -->
+    <div class="fire-overlay" id="growthOverlay">Please Click at a Point to Get Percent Growth</div>
+
   </section>
   
   <!-- Footer -->
@@ -234,6 +240,37 @@
   <!-- Scripts -->
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <script>
+
+    // 3) Function that computes a "somewhat realistic" percentage based on weather
+function computeGrowthPercentage(weatherObj) {
+  // Safely extract values or use defaults
+  let rain = parseFloat(weatherObj.rain) || 0;
+  let temp = parseFloat(weatherObj.temperature_2m) 
+             || parseFloat(weatherObj.temperature) 
+             || 20; // fallback if no data
+  let humidity = parseFloat(weatherObj.relative_humidity_2m) || 50;
+
+  // Base random near 50
+  let base = 50 + (Math.random() * 20 - 10); // 40 to 60
+
+  // Factor in temperature (higher temp => higher growth)
+  base += (temp - 20) * 1.2;
+  // Factor in rain (more rain => big reduction)
+  base -= rain * 10;
+  // Factor in dryness (humidity < 50 => more growth)
+  base += (50 - humidity) * 0.3;
+
+  // Clamp between 0 and 100
+  if (base < 0) base = 0;
+  if (base > 100) base = 100;
+
+  // Return only one decimal place
+  return base.toFixed(1);
+}
+
+  </script>
   <!-- PapaParse for CSV parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <script>
@@ -241,6 +278,9 @@
     let demoMode = false;
     // Global array to store each phase’s duplicate polygon
     let firePolygons = [];
+
+    // NEW: Store global wind direction
+    let globalWindDirection = 0; // Will be updated from fetchWeatherData
     
     /***** Navigation & View Functions *****/
     function showMainPage() {
@@ -307,43 +347,59 @@
       
       // NEW: Define fetchWeatherData and expose it globally
       function fetchWeatherData(lat, lng) {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
-                    `&hourly=temperature_2m,rain,relative_humidity_2m,soil_moisture_1_to_3cm,vapour_pressure_deficit,visibility,wind_speed_180m,wind_direction_180m,temperature_180m,wind_gusts_10m` +
-                    `&timezone=America/Los_Angeles` +
-                    `&current=rain,surface_pressure,wind_direction_10m,wind_gusts_10m,wind_speed_10m,temperature_2m,relative_humidity_2m,vapour_pressure_deficit`;
-      
-        fetch(url)
-          .then(response => response.json())
-          .then(data => {
-            console.log("Weather API Data:", data);
-            let popupContent = `<strong></strong>`;
-      
-            if (data.current) {
-              popupContent += `Rain: ${data.current.rain} mm<br>`;
-              popupContent += `Surface Pressure: ${data.current.surface_pressure} hPa<br>`;
-              popupContent += `Wind Direction: ${data.current.wind_direction_10m}°<br>`;
-              popupContent += `Wind Gusts: ${data.current.wind_gusts_10m} km/h<br>`;
-              popupContent += `Wind Speed: ${data.current.wind_speed_10m} km/h<br>`;
-              popupContent += `Temperature: ${data.current.temperature_2m}°C<br>`;
-              popupContent += `Relative Humidity: ${data.current.relative_humidity_2m}%<br>`;
-              popupContent += `Vapour Pressure Deficit: ${data.current.vapour_pressure_deficit}<br>`;
-            } else if (data.current_weather) {
-              popupContent += `Temperature: ${data.current_weather.temperature}°C<br>`;
-              popupContent += `Wind Speed: ${data.current_weather.windspeed} km/h<br>`;
-            } else {
-              popupContent += "No current weather data available.";
-            }
-            
-            // NEW: Instead of a popup, update the overlay's content
-            document.getElementById("timeOverlay").innerHTML =
-              `<strong>Current Data at Latitude ${lat.toFixed(4)}, Longitude ${lng.toFixed(4)}:</strong><br>` +
-              popupContent;
-      
-          })
-          .catch(error => {
-            console.error("Error fetching weather data:", error);
-          });
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}`
+            + `&hourly=temperature_2m,rain,relative_humidity_2m,soil_moisture_1_to_3cm,vapour_pressure_deficit,visibility,wind_speed_180m,wind_direction_180m,temperature_180m,wind_gusts_10m`
+            + `&timezone=America/Los_Angeles`
+            + `&current=rain,surface_pressure,wind_direction_10m,wind_gusts_10m,wind_speed_10m,temperature_2m,relative_humidity_2m,vapour_pressure_deficit`;
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      console.log("Weather API Data:", data);
+      let popupContent = `<strong></strong>`;
+
+      if (data.current) {
+        popupContent += `Rain: ${data.current.rain} mm<br>`;
+        popupContent += `Surface Pressure: ${data.current.surface_pressure} hPa<br>`;
+        popupContent += `Wind Direction: ${data.current.wind_direction_10m}°<br>`;
+        popupContent += `Wind Gusts: ${data.current.wind_gusts_10m} km/h<br>`;
+        popupContent += `Wind Speed: ${data.current.wind_speed_10m} km/h<br>`;
+        popupContent += `Temperature: ${data.current.temperature_2m}°C<br>`;
+        popupContent += `Relative Humidity: ${data.current.relative_humidity_2m}%<br>`;
+        popupContent += `Vapour Pressure Deficit: ${data.current.vapour_pressure_deficit}<br>`;
+
+        // NEW: Update global wind direction (if available)
+        if (data.current.wind_direction_10m) {
+          globalWindDirection = parseFloat(data.current.wind_direction_10m) || 0;
+        }
+      } else if (data.current_weather) {
+        popupContent += `Temperature: ${data.current_weather.temperature}°C<br>`;
+        popupContent += `Wind Speed: ${data.current_weather.windspeed} km/h<br>`;
+
+        // Optionally set global wind direction from current_weather if needed
+        // (Commented out, but leaving it here for completeness)
+        // if (data.current_weather.winddirection) {
+        //   globalWindDirection = parseFloat(data.current_weather.winddirection) || 0;
+        // }
+      } else {
+        popupContent += "No current weather data available.";
       }
+      
+      // Update the top overlay with weather info
+      document.getElementById("timeOverlay").innerHTML =
+        `<strong>Current Data at Latitude ${lat.toFixed(4)}, Longitude ${lng.toFixed(4)}:</strong><br>`
+        + popupContent;
+
+      // Compute and display a "Growth Percentage" below
+      const growthVal = computeGrowthPercentage(data.current || data.current_weather || {});
+      document.getElementById("growthOverlay").innerHTML =
+        `<strong>Growth Percentage:</strong> ${growthVal}%`;
+    })
+    .catch(error => {
+      console.error("Error fetching weather data:", error);
+    });
+}
+
       // Expose fetchWeatherData globally so it can be used by simulateFireAt
       window.fetchWeatherData = fetchWeatherData;
       
@@ -375,6 +431,9 @@
         .then(data => {
           data.events.forEach(event => {
             let geometry = event.geometry[event.geometry.length - 1];
+            let eventYear = new Date(geometry.date).getFullYear();
+            // Only display events if the year is 2025 or later
+            if (eventYear < 2025) return;
             let coords = geometry.coordinates; // [longitude, latitude]
             let lat = coords[1];
             let lng = coords[0];
@@ -426,15 +485,29 @@
       createFirePolygon(L.latLng(34.0522, -118.2437));
     }
     
-    // --- Modified: Create polygon vertices with an angle offset.
+    // --- Modified: Create polygon vertices with an angle offset *and* wind bias. ---
     function createPolygonVertices(center, baseRadius, offsets, scale, angleOffset = 0) {
       const numSides = offsets.length;
       let vertices = [];
+      // Convert globalWindDirection to radians for quick use
+      let windDirRad = (globalWindDirection * Math.PI) / 180;
+
       for (let i = 0; i < numSides; i++) {
-        let radius = baseRadius + offsets[i] * scale;
+        let rawRadius = baseRadius + offsets[i] * scale;
         let angle = (2 * Math.PI / numSides) * i + angleOffset;
-        let deltaLat = (radius / 111320) * Math.cos(angle);
-        let deltaLng = (radius / (40075000 * Math.cos(center.lat * Math.PI/180) / 360)) * Math.sin(angle);
+
+        // Factor in wind direction so it's larger in the wind's direction
+        // e.g. scale by (1 + 0.4 * cos(angleDiff))
+        let angleDiff = angle - windDirRad;
+        let windFactor = 1 + 0.4 * Math.cos(angleDiff);
+        // Optionally clamp so it doesn't shrink below 60% or exceed 140%
+        if (windFactor < 0.6) windFactor = 0.6;
+        if (windFactor > 1.4) windFactor = 1.4;
+
+        let finalRadius = rawRadius * windFactor;
+
+        let deltaLat = (finalRadius / 111320) * Math.cos(angle);
+        let deltaLng = (finalRadius / (40075000 * Math.cos(center.lat * Math.PI/180) / 360)) * Math.sin(angle);
         vertices.push([center.lat + deltaLat, center.lng + deltaLng]);
       }
       return vertices;
@@ -462,7 +535,7 @@
       requestAnimationFrame(step);
     }
     
-    // --- Modified animatePhase to include an angleOffset parameter.
+    // --- Modified animatePhase to include an angleOffset parameter. ---
     function animatePhase(polygon, center, baseRadius, offsets, startScale, endScale, startColor, endColor, duration, angleOffset, callback) {
       let startTime = null;
       function step(timestamp) {
@@ -483,58 +556,67 @@
       requestAnimationFrame(step);
     }
     
-    // --- Original Phase 1: Expand from scale 1 to 2.5, color remains red.
+    // --- Original Phase 1: Expand from scale 1 -> 2.5, color remains red
+    //     CHANGED: smaller expansions & slower for random fires
     function animatePhase1(center, baseRadius, offsets, angleOffset) {
       let vertices = createPolygonVertices(center, baseRadius, offsets, 1, angleOffset);
       let polygon = L.polygon(vertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
-      animatePhase(polygon, center, baseRadius, offsets, 1, 2.5, "#ff0000", "#ff0000", 5000, angleOffset, (finalVertices) => {
+      // CHANGED: scale from 1 to 1.2, duration 7000
+      animatePhase(polygon, center, baseRadius, offsets, 1, 1.2, "#ff0000", "#ff0000", 7000, angleOffset, (finalVertices) => {
         let newAngleOffset = -0.15 + Math.random() * 0.3;
         animatePhase2(center, baseRadius, finalVertices, offsets, newAngleOffset);
       });
     }
     
-    // --- Original Phase 2: Duplicate polygon; animate from previous state to new state (scale 3.5, red to orange).
+    // --- Original Phase 2: from scale 2.5 -> 3.5, color red->orange
+    //     CHANGED: smaller expansions & slower for random fires
     function animatePhase2(center, baseRadius, startVertices, currentOffsets, angleOffset) {
-      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
-      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 3.5, angleOffset);
+      // CHANGED: smaller random expansions
+      let newOffsets = currentOffsets.map(off => off + (100 + Math.random() * 200));
+      // CHANGED: final scale 1.4
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1.4, angleOffset);
       let polygon = L.polygon(startVertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
-      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ff0000", "#ff7f00", 3000, (finalVertices) => {
+      // CHANGED: animate 7000 ms, color from #ff0000 to #ff7f00
+      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ff0000", "#ff7f00", 7000, (finalVertices) => {
         animatePhase3(center, baseRadius, finalVertices, newOffsets, -0.1 + Math.random() * 0.2);
       });
     }
     
-    // --- Original Phase 3: Duplicate polygon; animate from previous state to new state (scale 4.5, orange to yellow).
+    // --- Original Phase 3: scale 3.5 -> 4.5, color orange->yellow
+    //     CHANGED: smaller expansions & slower
     function animatePhase3(center, baseRadius, startVertices, currentOffsets, angleOffset) {
-      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
-      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 4.5, angleOffset);
+      let newOffsets = currentOffsets.map(off => off + (100 + Math.random() * 200));
+      // CHANGED: final scale 1.55
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1.55, angleOffset);
       let polygon = L.polygon(startVertices, { color: "#ff7f00", fillColor: "#ff7f00", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
-      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ff7f00", "#ffff00", 3000, (finalVertices) => {
+      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ff7f00", "#ffff00", 7000, (finalVertices) => {
         animatePhase4(center, baseRadius, finalVertices, newOffsets, -0.05 + Math.random() * 0.1);
       });
     }
     
-    // --- Original Phase 4: Duplicate polygon; animate from previous state to new state (scale 5.0, yellow to green).
+    // --- Original Phase 4: scale 4.5 -> 5.0, color yellow->green
+    //     CHANGED: smaller expansions & slower
     function animatePhase4(center, baseRadius, startVertices, currentOffsets, angleOffset) {
-      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
-      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 5.0, angleOffset);
+      let newOffsets = currentOffsets.map(off => off + (100 + Math.random() * 200));
+      // CHANGED: final scale 1.7
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1.7, angleOffset);
       let polygon = L.polygon(startVertices, { color: "#ffff00", fillColor: "#ffff00", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
-      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ffff00", "#00ff00", 3000, (finalVertices) => {
+      animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ffff00", "#00ff00", 7000, (finalVertices) => {
         setTimeout(reorderPolygons, 100);
       });
     }
     
-    // --- NEW: Functions for simulating existing fires (using the magnitude radius and expanding each phase by 250–1000 m)
+    // --- NEW: Functions for simulating existing fires (unchanged expansions) ---
     
-    // New simulation entry point for existing fires.
     function simulateExistingFireAt(lat, lng, initialRadius) {
       const center = L.latLng(lat, lng);
       const numSides = 20;
       let offsets = [];
-      // Start with very small offsets (0 to 50) so the polygon closely matches the magnitude radius.
+      // Start with smaller offsets but grow bigger in phases
       for (let i = 0; i < numSides; i++) {
           offsets.push(Math.random() * 50);
       }
@@ -545,7 +627,6 @@
       }
     }
     
-    // Phase 1 for existing fire simulation: add a random 250–1000 m expansion at each vertex.
     function animateExistingPhase1(center, baseRadius, offsets, angleOffset) {
       let vertices = createPolygonVertices(center, baseRadius, offsets, 1, angleOffset);
       let polygon = L.polygon(vertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
@@ -558,7 +639,6 @@
       });
     }
     
-    // Phase 2 for existing fire simulation.
     function animateExistingPhase2(center, baseRadius, currentOffsets, angleOffset) {
       let vertices = createPolygonVertices(center, baseRadius, currentOffsets, 1, angleOffset);
       let polygon = L.polygon(vertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
@@ -571,7 +651,6 @@
       });
     }
     
-    // Phase 3 for existing fire simulation.
     function animateExistingPhase3(center, baseRadius, currentOffsets, angleOffset) {
       let vertices = createPolygonVertices(center, baseRadius, currentOffsets, 1, angleOffset);
       let polygon = L.polygon(vertices, { color: "#ff7f00", fillColor: "#ff7f00", fillOpacity: 0.6 }).addTo(map);
@@ -584,7 +663,6 @@
       });
     }
     
-    // Phase 4 for existing fire simulation.
     function animateExistingPhase4(center, baseRadius, currentOffsets, angleOffset) {
       let vertices = createPolygonVertices(center, baseRadius, currentOffsets, 1, angleOffset);
       let polygon = L.polygon(vertices, { color: "#ffff00", fillColor: "#ffff00", fillOpacity: 0.6 }).addTo(map);
@@ -596,7 +674,7 @@
       });
     }
     
-    // --- Create a fire polygon with fixed random offsets for a jagged 20-sided shape (for non-existing fires).
+    // --- For random area (non-existing) fires, create the shape and run the 4-phase smaller expansions. ---
     function createFirePolygon(center) {
       const numSides = 20;
       const baseRadius = 1000; // starting radius in meters for non-existing fires
@@ -638,7 +716,6 @@
     }
     
     // NEW: Global function to simulate fire at a given location when the "Simulate Fire" button is clicked in a popup.
-    // (This remains for non-existing fire simulations.)
     function simulateFireAt(lat, lng) {
       const latlng = L.latLng(lat, lng);
       createFirePolygon(latlng);
