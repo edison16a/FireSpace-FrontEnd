@@ -387,7 +387,11 @@
             });
             let marker = L.marker([lat, lng], { icon: fireIcon }).addTo(map);
             // Modified: include a styled "Simulate Fire" button in the popup
-            marker.bindPopup(`<b>${event.title}</b><br>${new Date(geometry.date).toLocaleString()}<br>Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}<br><div style="text-align:center; margin-top:10px;"><button style="background: black; color: white; border: none; border-radius: 50px; padding: 8px 16px; cursor: pointer;" onclick="simulateFireAt(${lat}, ${lng})">Simulate Fire</button></div>`);
+            // NEW: Pass the computed impactRadius so existing fires simulate using the new functions
+            let impactRadius = geometry.magnitudeValue 
+                               ? Math.sqrt((geometry.magnitudeValue * 4046.8564224) / Math.PI)
+                               : 10000; // fallback value if magnitudeValue is unavailable
+            marker.bindPopup(`<b>${event.title}</b><br>${new Date(geometry.date).toLocaleString()}<br>Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}<br><div style="text-align:center; margin-top:10px;"><button style="background: black; color: white; border: none; border-radius: 50px; padding: 8px 16px; cursor: pointer;" onclick="simulateExistingFireAt(${lat}, ${lng}, ${impactRadius})">Simulate Fire</button></div>`);
       
             // When marker is clicked, perform reverse geocoding to show the city/location and re-include the styled simulate button
             marker.on('click', function() {
@@ -395,18 +399,12 @@
                 .then(response => response.json())
                 .then(data => {
                   let city = data.address.city || data.address.town || data.address.village || data.address.county || "Unknown location";
-                  marker.getPopup().setContent(`<b>${event.title}</b><br>${new Date(geometry.date).toLocaleString()}<br>Location: ${city}<br><div style="text-align:center; margin-top:10px;"><button style="background: black; color: white; border: none; border-radius: 50px; padding: 8px 16px; cursor: pointer;" onclick="simulateFireAt(${lat}, ${lng})">Simulate Fire</button></div>`);
+                  marker.getPopup().setContent(`<b>${event.title}</b><br>${new Date(geometry.date).toLocaleString()}<br>Location: ${city}<br><div style="text-align:center; margin-top:10px;"><button style="background: black; color: white; border: none; border-radius: 50px; padding: 8px 16px; cursor: pointer;" onclick="simulateExistingFireAt(${lat}, ${lng}, ${impactRadius})">Simulate Fire</button></div>`);
                 })
                 .catch(err => console.error("Reverse geocoding error:", err));
             });
       
-            // NEW: Convert magnitudeValue (in acres) to radius in meters
-            // Area (m²) = magnitudeValue (acres) * 4046.8564224
-            // Radius = sqrt(Area/π)
-            let impactRadius = geometry.magnitudeValue 
-                               ? Math.sqrt((geometry.magnitudeValue * 4046.8564224) / Math.PI)
-                               : 10000; // fallback value if magnitudeValue is unavailable
-                               
+            // NEW: Draw the impact circle based on the magnitude radius.
             L.circle([lat, lng], {
               radius: impactRadius,
               color: 'red',
@@ -485,22 +483,18 @@
       requestAnimationFrame(step);
     }
     
-    // --- Phase 1: Expand from scale 1 to 2.5, color remains red.
-    // Use an initial angle offset between -0.2 and 0.2.
+    // --- Original Phase 1: Expand from scale 1 to 2.5, color remains red.
     function animatePhase1(center, baseRadius, offsets, angleOffset) {
       let vertices = createPolygonVertices(center, baseRadius, offsets, 1, angleOffset);
       let polygon = L.polygon(vertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
       animatePhase(polygon, center, baseRadius, offsets, 1, 2.5, "#ff0000", "#ff0000", 5000, angleOffset, (finalVertices) => {
-        // Proceed to Phase 2; pass along the current offsets.
-        // For Phase 2, use a new angle offset between -0.15 and 0.15.
         let newAngleOffset = -0.15 + Math.random() * 0.3;
         animatePhase2(center, baseRadius, finalVertices, offsets, newAngleOffset);
       });
     }
     
-    // --- Phase 2: Duplicate polygon; animate from previous state to new state (scale 3.5, red to orange).
-    // Grow each offset by an additional random amount (500–1500) and use a new angle offset.
+    // --- Original Phase 2: Duplicate polygon; animate from previous state to new state (scale 3.5, red to orange).
     function animatePhase2(center, baseRadius, startVertices, currentOffsets, angleOffset) {
       let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
       let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 3.5, angleOffset);
@@ -511,7 +505,7 @@
       });
     }
     
-    // --- Phase 3: Duplicate polygon; animate from previous state to new state (scale 4.5, orange to yellow).
+    // --- Original Phase 3: Duplicate polygon; animate from previous state to new state (scale 4.5, orange to yellow).
     function animatePhase3(center, baseRadius, startVertices, currentOffsets, angleOffset) {
       let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
       let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 4.5, angleOffset);
@@ -522,23 +516,90 @@
       });
     }
     
-    // --- Phase 4: Duplicate polygon; animate from previous state to new state (scale 5.0, yellow to green).
+    // --- Original Phase 4: Duplicate polygon; animate from previous state to new state (scale 5.0, yellow to green).
     function animatePhase4(center, baseRadius, startVertices, currentOffsets, angleOffset) {
       let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1000));
       let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 5.0, angleOffset);
       let polygon = L.polygon(startVertices, { color: "#ffff00", fillColor: "#ffff00", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
       animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ffff00", "#00ff00", 3000, (finalVertices) => {
-        // Final polygon remains green. After a short delay, re-order layers.
         setTimeout(reorderPolygons, 100);
       });
     }
     
-    // --- Create a fire polygon with fixed random offsets for a jagged 20-sided shape.
-    // The initial offsets are generated between 500 and 1500, and an initial angle offset is set.
+    // --- NEW: Functions for simulating existing fires (using the magnitude radius and expanding each phase by 250–1000 m)
+    
+    // New simulation entry point for existing fires.
+    function simulateExistingFireAt(lat, lng, initialRadius) {
+      const center = L.latLng(lat, lng);
+      const numSides = 20;
+      let offsets = [];
+      // Start with very small offsets (0 to 50) so the polygon closely matches the magnitude radius.
+      for (let i = 0; i < numSides; i++) {
+          offsets.push(Math.random() * 50);
+      }
+      let initialAngleOffset = -0.2 + Math.random() * 0.4;
+      animateExistingPhase1(center, initialRadius, offsets, initialAngleOffset);
+      if (window.fetchWeatherData) {
+        window.fetchWeatherData(lat, lng);
+      }
+    }
+    
+    // Phase 1 for existing fire simulation: add a random 250–1000 m expansion at each vertex.
+    function animateExistingPhase1(center, baseRadius, offsets, angleOffset) {
+      let vertices = createPolygonVertices(center, baseRadius, offsets, 1, angleOffset);
+      let polygon = L.polygon(vertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      let newOffsets = offsets.map(off => off + (500 + Math.random() * 1250));
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1, angleOffset);
+      animatePhaseFromVertices(polygon, vertices, targetVertices, "#ff0000", "#ff0000", 3000, (finalVertices) => {
+         let newAngleOffset = -0.15 + Math.random() * 0.3;
+         animateExistingPhase2(center, baseRadius, newOffsets, newAngleOffset);
+      });
+    }
+    
+    // Phase 2 for existing fire simulation.
+    function animateExistingPhase2(center, baseRadius, currentOffsets, angleOffset) {
+      let vertices = createPolygonVertices(center, baseRadius, currentOffsets, 1, angleOffset);
+      let polygon = L.polygon(vertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1250));
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1, angleOffset);
+      animatePhaseFromVertices(polygon, vertices, targetVertices, "#ff0000", "#ff7f00", 3000, (finalVertices) => {
+         let newAngleOffset = -0.1 + Math.random() * 0.2;
+         animateExistingPhase3(center, baseRadius, newOffsets, newAngleOffset);
+      });
+    }
+    
+    // Phase 3 for existing fire simulation.
+    function animateExistingPhase3(center, baseRadius, currentOffsets, angleOffset) {
+      let vertices = createPolygonVertices(center, baseRadius, currentOffsets, 1, angleOffset);
+      let polygon = L.polygon(vertices, { color: "#ff7f00", fillColor: "#ff7f00", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1250));
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1, angleOffset);
+      animatePhaseFromVertices(polygon, vertices, targetVertices, "#ff7f00", "#ffff00", 3000, (finalVertices) => {
+         let newAngleOffset = -0.05 + Math.random() * 0.1;
+         animateExistingPhase4(center, baseRadius, newOffsets, newAngleOffset);
+      });
+    }
+    
+    // Phase 4 for existing fire simulation.
+    function animateExistingPhase4(center, baseRadius, currentOffsets, angleOffset) {
+      let vertices = createPolygonVertices(center, baseRadius, currentOffsets, 1, angleOffset);
+      let polygon = L.polygon(vertices, { color: "#ffff00", fillColor: "#ffff00", fillOpacity: 0.6 }).addTo(map);
+      firePolygons.push(polygon);
+      let newOffsets = currentOffsets.map(off => off + (500 + Math.random() * 1250));
+      let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1, angleOffset);
+      animatePhaseFromVertices(polygon, vertices, targetVertices, "#ffff00", "#00ff00", 3000, (finalVertices) => {
+         setTimeout(reorderPolygons, 100);
+      });
+    }
+    
+    // --- Create a fire polygon with fixed random offsets for a jagged 20-sided shape (for non-existing fires).
     function createFirePolygon(center) {
       const numSides = 20;
-      const baseRadius = 1000; // starting radius in meters
+      const baseRadius = 1000; // starting radius in meters for non-existing fires
       let offsets = [];
       for (let i = 0; i < numSides; i++) {
         offsets.push(500 + Math.random() * 1000);
@@ -577,6 +638,7 @@
     }
     
     // NEW: Global function to simulate fire at a given location when the "Simulate Fire" button is clicked in a popup.
+    // (This remains for non-existing fire simulations.)
     function simulateFireAt(lat, lng) {
       const latlng = L.latLng(lat, lng);
       createFirePolygon(latlng);
