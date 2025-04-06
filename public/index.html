@@ -267,6 +267,9 @@ function computeGrowthPercentage(weatherObj) {
   if (base > 100) base = 100;
 
   // Return only one decimal place
+  // +++++ ADDED: store globally so we can use it to scale fires +++++
+  window.currentGrowthPercentage = parseFloat(base.toFixed(1));
+
   return base.toFixed(1);
 }
 
@@ -375,12 +378,6 @@ function computeGrowthPercentage(weatherObj) {
       } else if (data.current_weather) {
         popupContent += `Temperature: ${data.current_weather.temperature}°C<br>`;
         popupContent += `Wind Speed: ${data.current_weather.windspeed} km/h<br>`;
-
-        // Optionally set global wind direction from current_weather if needed
-        // (Commented out, but leaving it here for completeness)
-        // if (data.current_weather.winddirection) {
-        //   globalWindDirection = parseFloat(data.current_weather.winddirection) || 0;
-        // }
       } else {
         popupContent += "No current weather data available.";
       }
@@ -485,6 +482,17 @@ function computeGrowthPercentage(weatherObj) {
       createFirePolygon(L.latLng(34.0522, -118.2437));
     }
     
+    // +++++ ADDED: A helper to convert the global growth percentage into a factor. +++++
+    function getGrowthFactor() {
+      // If there's no global % set yet, default to 50 => factor 1.0
+      const gp = window.currentGrowthPercentage || 50;
+      // Each 1% above 50 => +0.01 to factor; each 1% below 50 => -0.01 from factor
+      let factor = 1 + (gp - 50) * 0.01;
+      // Optionally clamp, e.g. 0.5 to 1.5
+      // factor = Math.max(0.5, Math.min(1.5, factor));
+      return factor;
+    }
+
     // --- Modified: Create polygon vertices with an angle offset *and* wind bias. ---
     function createPolygonVertices(center, baseRadius, offsets, scale, angleOffset = 0) {
       const numSides = offsets.length;
@@ -497,10 +505,8 @@ function computeGrowthPercentage(weatherObj) {
         let angle = (2 * Math.PI / numSides) * i + angleOffset;
 
         // Factor in wind direction so it's larger in the wind's direction
-        // e.g. scale by (1 + 0.4 * cos(angleDiff))
         let angleDiff = angle - windDirRad;
         let windFactor = 1 + 0.4 * Math.cos(angleDiff);
-        // Optionally clamp so it doesn't shrink below 60% or exceed 140%
         if (windFactor < 0.6) windFactor = 0.6;
         if (windFactor > 1.4) windFactor = 1.4;
 
@@ -572,13 +578,10 @@ function computeGrowthPercentage(weatherObj) {
     // --- Original Phase 2: from scale 2.5 -> 3.5, color red->orange
     //     CHANGED: smaller expansions & slower for random fires
     function animatePhase2(center, baseRadius, startVertices, currentOffsets, angleOffset) {
-      // CHANGED: smaller random expansions
       let newOffsets = currentOffsets.map(off => off + (100 + Math.random() * 200));
-      // CHANGED: final scale 1.4
       let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1.4, angleOffset);
       let polygon = L.polygon(startVertices, { color: "#ff0000", fillColor: "#ff0000", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
-      // CHANGED: animate 7000 ms, color from #ff0000 to #ff7f00
       animatePhaseFromVertices(polygon, startVertices, targetVertices, "#ff0000", "#ff7f00", 7000, (finalVertices) => {
         animatePhase3(center, baseRadius, finalVertices, newOffsets, -0.1 + Math.random() * 0.2);
       });
@@ -588,7 +591,6 @@ function computeGrowthPercentage(weatherObj) {
     //     CHANGED: smaller expansions & slower
     function animatePhase3(center, baseRadius, startVertices, currentOffsets, angleOffset) {
       let newOffsets = currentOffsets.map(off => off + (100 + Math.random() * 200));
-      // CHANGED: final scale 1.55
       let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1.55, angleOffset);
       let polygon = L.polygon(startVertices, { color: "#ff7f00", fillColor: "#ff7f00", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
@@ -601,7 +603,6 @@ function computeGrowthPercentage(weatherObj) {
     //     CHANGED: smaller expansions & slower
     function animatePhase4(center, baseRadius, startVertices, currentOffsets, angleOffset) {
       let newOffsets = currentOffsets.map(off => off + (100 + Math.random() * 200));
-      // CHANGED: final scale 1.7
       let targetVertices = createPolygonVertices(center, baseRadius, newOffsets, 1.7, angleOffset);
       let polygon = L.polygon(startVertices, { color: "#ffff00", fillColor: "#ffff00", fillOpacity: 0.6 }).addTo(map);
       firePolygons.push(polygon);
@@ -614,14 +615,17 @@ function computeGrowthPercentage(weatherObj) {
     
     function simulateExistingFireAt(lat, lng, initialRadius) {
       const center = L.latLng(lat, lng);
+      // +++++ ADDED: factor in growth percentage +++++
+      const growthFactor = getGrowthFactor();
+      const scaledInitialRadius = initialRadius * growthFactor;
+      
       const numSides = 20;
       let offsets = [];
-      // Start with smaller offsets but grow bigger in phases
       for (let i = 0; i < numSides; i++) {
           offsets.push(Math.random() * 50);
       }
       let initialAngleOffset = -0.2 + Math.random() * 0.4;
-      animateExistingPhase1(center, initialRadius, offsets, initialAngleOffset);
+      animateExistingPhase1(center, scaledInitialRadius, offsets, initialAngleOffset);
       if (window.fetchWeatherData) {
         window.fetchWeatherData(lat, lng);
       }
@@ -678,13 +682,19 @@ function computeGrowthPercentage(weatherObj) {
     function createFirePolygon(center) {
       const numSides = 20;
       const baseRadius = 1000; // starting radius in meters for non-existing fires
+      // +++++ ADDED: factor in growth percentage +++++
+      const growthFactor = getGrowthFactor();
+      const adjustedRadius = baseRadius * growthFactor; 
+      // (We keep "baseRadius" unchanged so we don't remove any existing code!)
+      
       let offsets = [];
       for (let i = 0; i < numSides; i++) {
         offsets.push(500 + Math.random() * 1000);
       }
       let initialAngleOffset = -0.2 + Math.random() * 0.4;
       firePolygons = [];
-      animatePhase1(center, baseRadius, offsets, initialAngleOffset);
+      // Use the newly scaled radius
+      animatePhase1(center, adjustedRadius, offsets, initialAngleOffset);
     }
     
     // Reorder the polygons so that the smallest (Phase 1) is on top.
