@@ -144,6 +144,12 @@
       background: #ffffff !important; /* white background */
       color: #000000 !important;       /* black text */
     }
+    /* Optional: style for custom fire emoji markers */
+    .custom-fire-icon {
+      background: transparent;
+      border: none;
+      font-size: 1.8rem;
+    }
   </style>
 </head>
 <body>
@@ -196,7 +202,7 @@
   </section>
   <section class="section container" id="how4">
     <div class="image">
-      <img src="https://t3.ftcdn.net/jpg/05/31/71/02/360_F_531710260_ByieqNe7Ut6QBHgIR7xgdsxH7gICrHr1.jpg" alt="Model Training">
+      <img src="file:///var/folders/yt/z87msxyn14x50l66fd30cbvh0000gn/T/TemporaryItems/NSIRD_screencaptureui_bVXt1j/Screenshot%202025-04-05%20at%206.58.50%E2%80%AFPM.png" alt="Model Training">
     </div>
     <div class="text">
       <h2>Step 4: FrontEnd</h2>
@@ -339,7 +345,7 @@
           });
       }
       
-      // Array of cities with coordinates and fire risk levels
+      // ORIGINAL: Static city markers
       const cities = [
         { name: "Los Angeles, CA", coords: [34.0522, -118.2437], risk: "Moderate" },
         { name: "San Francisco, CA", coords: [37.7749, -122.4194], risk: "High" },
@@ -353,11 +359,62 @@
         { name: "Bakersfield, CA", coords: [35.3733, -119.0187], risk: "High" }
       ];
       
-      // Loop through each city and create a marker with a popup
+      // Commented out static markers for cities
+      /*
       cities.forEach(city => {
         const marker = L.marker(city.coords).addTo(map);
         marker.bindPopup(`<b>${city.name}</b><br>Fire risk: ${city.risk}.`);
       });
+      */
+      
+      // NEW: Fetch current wildfire events from NASA EONET and display them with a fire emoji and impact radius.
+      fetch('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&category=wildfires')
+  .then(response => response.json())
+  .then(data => {
+    data.events.forEach(event => {
+      let geometry = event.geometry[event.geometry.length - 1];
+      let coords = geometry.coordinates; // [longitude, latitude]
+      let lat = coords[1];
+      let lng = coords[0];
+      // Create a custom fire emoji marker using a divIcon
+      let fireIcon = L.divIcon({
+        html: '🔥',
+        className: 'custom-fire-icon',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
+      let marker = L.marker([lat, lng], { icon: fireIcon }).addTo(map);
+      marker.bindPopup(`<b>${event.title}</b><br>${new Date(geometry.date).toLocaleString()}<br>Location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      
+      // When marker is clicked, perform reverse geocoding to show the city/location
+      marker.on('click', function() {
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`)
+          .then(response => response.json())
+          .then(data => {
+            let city = data.address.city || data.address.town || data.address.village || data.address.county || "Unknown location";
+            marker.getPopup().setContent(`<b>${event.title}</b><br>${new Date(geometry.date).toLocaleString()}<br>Location: ${city}`);
+          })
+          .catch(err => console.error("Reverse geocoding error:", err));
+      });
+      
+      // NEW: Convert magnitudeValue (in acres) to radius in meters
+      // Area (m²) = magnitudeValue (acres) * 4046.8564224
+      // Radius = sqrt(Area/π)
+      let impactRadius = geometry.magnitudeValue 
+                         ? Math.sqrt((geometry.magnitudeValue * 4046.8564224) / Math.PI)
+                         : 10000; // fallback value if magnitudeValue is unavailable
+                         
+      L.circle([lat, lng], {
+        radius: impactRadius,
+        color: 'red',
+        fillColor: '#f03',
+        fillOpacity: 0.2
+      }).addTo(map);
+    });
+  })
+  .catch(error => console.error('Error fetching wildfire data:', error));
+
+
       
       // Clear previous click listeners and add a new one for creating fire polygons and updating data
       map.off('click');
