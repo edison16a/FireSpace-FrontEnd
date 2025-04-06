@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FireSpace - Wildfire Analytics</title>
+  <title>FlameSense - Wildfire Analytics</title>
   <!-- Leaflet CSS for Map Demo -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
@@ -142,7 +142,7 @@
 <body>
   <!-- Navigation -->
   <nav>
-    <div class="nav-logo" id="homeBtn">🔥 FireSpace</div>
+    <div class="nav-logo" id="homeBtn">🔥 FlameSense</div>
     <ul>
       <li><div class="nav-button" id="aboutNav">About</div></li>
       <li><div class="nav-button" id="howNav">How We Did It</div></li>
@@ -153,8 +153,8 @@
   <!-- Hero / About Section -->
   <header class="hero" id="hero">
     <div class="content">
-      <h1>Welcome to <span class="fire-emoji">🔥</span> FireSpace</h1>
-      <p>Revolutionizing wildfire prediction in California</p>
+      <h1>Welcome to <span class="fire-emoji">🔥</span> FlameSense</h1>
+      <p>Using Machine Learning and Palantir AIP to Revolutionize wildfire spread prediction in California</p>
       <button class="btn" id="demoBtn">Predict Fires</button>
     </div>
   </header>
@@ -215,7 +215,7 @@
   
   <!-- Footer -->
   <footer>
-    &copy; 2025 FireSpace. All rights reserved.
+    &copy; 2025 FlameSense. All rights reserved.
   </footer>
   
   <!-- Scripts -->
@@ -286,24 +286,83 @@
     /***** Map Initialization and Interactive Fire Polygon *****/
     let map;
     function initMap() {
-      map = L.map('map').setView([36.7783, -119.4179], 6);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+  map = L.map('map').setView([36.7783, -119.4179], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  function fetchWeatherData(lat, lng) {
+  // Build the API URL using the parameters from your linked docs page
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}` +
+              `&hourly=temperature_2m,rain,relative_humidity_2m,soil_moisture_1_to_3cm,vapour_pressure_deficit,visibility,wind_speed_180m,wind_direction_180m,temperature_180m,wind_gusts_10m` +
+              `&timezone=America/Los_Angeles` +
+              `&current=rain,surface_pressure,wind_direction_10m,wind_gusts_10m,wind_speed_10m`;
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      console.log("Weather API Data:", data);
+      let popupContent = `<strong>Current Weather:</strong><br>`;
+
+      // Check for the 'current' property first
+      if (data.current) {
+        popupContent += `Rain: ${data.current.rain} mm<br>`;
+        popupContent += `Surface Pressure: ${data.current.surface_pressure} hPa<br>`;
+        popupContent += `Wind Direction: ${data.current.wind_direction_10m}°<br>`;
+        popupContent += `Wind Gusts: ${data.current.wind_gusts_10m} km/h<br>`;
+        popupContent += `Wind Speed: ${data.current.wind_speed_10m} km/h<br>`;
+      } else if (data.current_weather) {
+        // Fallback to current_weather if available
+        popupContent += `Temperature: ${data.current_weather.temperature}°C<br>`;
+        popupContent += `Wind Speed: ${data.current_weather.windspeed} km/h<br>`;
+      } else {
+        popupContent += "No current weather data available.";
+      }
       
-      // Marker example for Los Angeles
-      const laMarker = L.marker([34.0522, -118.2437]).addTo(map);
-      laMarker.bindPopup("<b>Los Angeles, CA</b><br>Fire risk: Moderate.");
-      
-      // Clear previous click listeners and add a new one
-      map.off('click');
-      map.on('click', function(e) {
-        createFirePolygon(e.latlng);
-      });
-      
-      // Create a default polygon at Los Angeles
-      createFirePolygon(L.latLng(34.0522, -118.2437));
-    }
+      // Display the weather info in a Leaflet popup at the clicked location
+      L.popup()
+        .setLatLng([lat, lng])
+        .setContent(popupContent)
+        .openOn(map);
+    })
+    .catch(error => {
+      console.error("Error fetching weather data:", error);
+    });
+}
+
+  
+  // Array of cities with coordinates and fire risk levels
+  const cities = [
+    { name: "Los Angeles, CA", coords: [34.0522, -118.2437], risk: "Moderate" },
+    { name: "San Francisco, CA", coords: [37.7749, -122.4194], risk: "High" },
+    { name: "San Diego, CA", coords: [32.7157, -117.1611], risk: "Low" },
+    { name: "Sacramento, CA", coords: [38.5816, -121.4944], risk: "Moderate" },
+    { name: "San Jose, CA", coords: [37.3382, -121.8863], risk: "Moderate" },
+    { name: "Fresno, CA", coords: [36.7378, -119.7871], risk: "High" },
+    { name: "Oakland, CA", coords: [37.8044, -122.2711], risk: "Moderate" },
+    { name: "Santa Barbara, CA", coords: [34.4208, -119.6982], risk: "High" },
+    { name: "Long Beach, CA", coords: [33.7701, -118.1937], risk: "Low" },
+    { name: "Bakersfield, CA", coords: [35.3733, -119.0187], risk: "High" }
+  ];
+  
+  // Loop through each city and create a marker with a popup
+  cities.forEach(city => {
+    const marker = L.marker(city.coords).addTo(map);
+    marker.bindPopup(`<b>${city.name}</b><br>Fire risk: ${city.risk}.`);
+  });
+  
+  // Clear previous click listeners and add a new one for creating fire polygons
+  map.off('click');
+  map.on('click', function(e) {
+    createFirePolygon(e.latlng);
+
+    fetchWeatherData(e.latlng.lat, e.latlng.lng);
+  });
+  
+  // Optionally, create a default fire polygon at Los Angeles
+  createFirePolygon(L.latLng(34.0522, -118.2437));
+}
+
     
     // --- Modified: Create polygon vertices with an angle offset.
     function createPolygonVertices(center, baseRadius, offsets, scale, angleOffset = 0) {
