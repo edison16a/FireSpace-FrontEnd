@@ -1,8 +1,9 @@
 # FireSpace-FrontEnd
 https://fire-space-front-end-git-main-edison16as-projects.vercel.app/
 
-Welcome to 🔥 FlameSense
-Using Machine Learning and Palantir AIP to Revolutionize wildfire spread prediction
+At Los Altos, we built FlameSense, which helps first responders and the public by simulating wildfire spread using a sequential neural network trained on historical fire data and current weather conditions like temperature, humidity, and wind. Users can select locations on a map to see predicted fire growth visualized as a heat map, helping with better resource planning and awareness. 
+
+3rd Place
 
 Predict Fires
 Data Collection
